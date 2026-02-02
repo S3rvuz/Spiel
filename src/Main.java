@@ -1,15 +1,15 @@
-import javax.swing.*;
-import java.awt.*;
-import java.awt.event.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import javax.swing.*;  //GUI
+import java.awt.*; //Grafik für Farben, rechtecke etc
+import java.awt.event.*; //Tastatur inputs
+import java.util.ArrayList; //Listen (Hindernisse und Coins)
+import java.util.List;  //Gleiches
+import java.util.Random; //Zufallzahlen für Spawnobjekte
 
 public class Main {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-            JFrame f = new JFrame("Jetpack Runner (Beginner)");
+           /* JFrame f = new JFrame("Jetpack Runner (Beginner)");
             f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
             f.setResizable(false);
 
@@ -18,6 +18,28 @@ public class Main {
             f.pack();
             f.setLocationRelativeTo(null);
             f.setVisible(true);
+
+            panel.start(); */
+
+            //Fullscreen
+            JFrame frame = new JFrame("Jetpack Spiel");
+            frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+            frame.setUndecorated(true); // Full
+
+            Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+
+            GamePanel panel = new GamePanel(screen.width, screen.height);
+            frame.setContentPane(panel);
+
+            GraphicsDevice gd = GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice();
+
+            if (gd.isFullScreenSupported()) {
+                gd.setFullScreenWindow(frame);
+            } else {
+                frame.setSize(screen);
+                frame.setLocationRelativeTo(null);
+                frame.setVisible(true);
+            }
 
             panel.start();
         });
@@ -55,6 +77,8 @@ public class Main {
         private final List<Obstacle> obstacles = new ArrayList<>();
         private final List<Coin> coins = new ArrayList<>();
 
+        private Image playerImage;
+
         private boolean jetOn = false;
         private boolean gameOver = false;
 
@@ -68,6 +92,16 @@ public class Main {
         private int score = 0;
         private int coinScore = 0;
 
+        private Image loadImage(String path) {
+            try {
+                return javax.imageio.ImageIO.read(new java.io.File(path));
+            } catch (Exception e) {
+                System.out.println("Bild nicht gefunden: " + path);
+                return null;
+            }
+        }
+
+            //Konstruktor
         GamePanel(int w, int h) {
             this.W = w;
             this.H = h;
@@ -78,6 +112,8 @@ public class Main {
             addKeyListener(this);
 
             resetGame();
+
+            playerImage = loadImage("assets/Screenshot 2026-02-02 101301-Photoroom.png");
 
             // FIX: Timer ist javax.swing.Timer
             timer = new javax.swing.Timer(16, this); // ~60 FPS
@@ -216,19 +252,26 @@ public class Main {
             }
 
             // Player
-            g2.setColor(new Color(90, 180, 255));
-            g2.fillRoundRect((int) player.x, (int) player.y, player.w, player.h, 10, 10);
+           // g2.setColor(new Color(90, 180, 255));
+           // g2.fillRoundRect((int) player.x, (int) player.y, player.w, player.h, 10, 10);
+
+            if (playerImage != null) {
+                g2.drawImage(playerImage, (int) player.x, (int) player.y, player.w,player.h, null);
+            } else {
+                g2.setColor(new Color(90, 180, 255));
+                g2.fillRoundRect((int) player.x, (int) player.y, player.w, player.h, 10, 10);
+            }
 
             // Jet flame
             if (jetOn && !gameOver) {
                 g2.setColor(new Color(255, 140, 60));
-                int fx = (int) player.x - 10;
+                int fx = (int) player.x - 1;
                 int fy = (int) (player.y + player.h * 0.6);
-                g2.fillOval(fx, fy, 14, 10);
+                g2.fillOval(fx, fy, 10, 50);
             }
 
             // HUD
-            g2.setColor(Color.WHITE);
+            g2.setColor(Color.RED);
             g2.setFont(new Font("Consolas", Font.BOLD, 16));
             g2.drawString("Score: " + score, 16, 26);
             g2.drawString("Coins: " + (coinScore / 10), 16, 48);
