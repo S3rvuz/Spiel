@@ -47,7 +47,7 @@ public class Main {
 
     static class GamePanel extends JPanel implements ActionListener, KeyListener {
 
-        // ====== EASY TWEAK ZONE ======
+
         final int W, H;
 
         double gravity = 0.60;
@@ -57,9 +57,9 @@ public class Main {
         double worldSpeed = 4.0;
         int groundMargin = 20;
 
-        int obstacleEveryMsMin = 900;
-        int obstacleEveryMsMax = 1300;
-        int coinEveryMsMin = 600;
+        int obstacleEveryMsMin = 250;
+        int obstacleEveryMsMax = 130;
+        int coinEveryMsMin = 60;
         int coinEveryMsMax = 1100;
 
         int playerW = 35, playerH = 45;
@@ -91,6 +91,13 @@ public class Main {
         private long startTime = 0;
         private int score = 0;
         private int coinScore = 0;
+
+        private double distSinceObstacle = 0;
+        private double nextObstancleDist = 0;
+
+        private double distSinceCoin = 0;
+        private double nextCoinDist = 0;
+
 
         private Image loadImage(String path) {
             try {
@@ -141,6 +148,12 @@ public class Main {
 
             lastCoinSpawn = now;
             nextCoinInMs = randBetween(coinEveryMsMin, coinEveryMsMax);
+
+            distSinceObstacle = 0;
+            nextObstancleDist = randBetween(320, 520);
+
+            distSinceCoin = 0;
+            nextCoinDist = randBetween(220, 420);
         }
 
         private int randBetween(int a, int b) {
@@ -185,6 +198,21 @@ public class Main {
                 lastCoinSpawn = now;
                 nextCoinInMs = randBetween(coinEveryMsMin, coinEveryMsMax);
             }
+
+            //Spawnrate erhöhen
+           /* distSinceObstacle += worldSpeed;
+            distSinceCoin += worldSpeed;
+
+            if (distSinceObstacle >= nextObstacleInMs) {
+                spawnObstacle();
+                distSinceObstacle = 0;
+                nextObstancleDist = randBetween(10, 15);
+            }
+            if (distSinceCoin >= nextCoinDist) {
+                spawnCoin();
+                distSinceCoin = 0;
+                nextCoinDist = randBetween(220, 420);
+            } */
 
             for (Obstacle ob : obstacles) ob.x -= worldSpeed;
             for (Coin c : coins) c.x -= worldSpeed;
@@ -277,6 +305,8 @@ public class Main {
             g2.drawString("Coins: " + (coinScore / 10), 16, 48);
             g2.setFont(new Font("Consolas", Font.PLAIN, 12));
             g2.drawString("SPACE = jetpack | R = restart", 16, 70);
+            g2.setFont(new Font("Consolas", Font.PLAIN, 12));
+            g2.drawString("QUIT | ESC", 16, 90);
 
             if (gameOver) {
                 g2.setColor(new Color(0, 0, 0, 160));
@@ -304,6 +334,7 @@ public class Main {
         public void keyPressed(KeyEvent e) {
             if (e.getKeyCode() == KeyEvent.VK_SPACE) jetOn = true;
             if (e.getKeyCode() == KeyEvent.VK_R) resetGame();
+            if (e.getKeyCode() == KeyEvent.VK_ESCAPE) System.exit(0);
         }
 
         @Override
