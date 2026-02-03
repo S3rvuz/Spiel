@@ -4,6 +4,8 @@ import java.awt.event.*; //Tastatur inputs
 import java.util.ArrayList; //Listen (Hindernisse und Coins)
 import java.util.List;  //Gleiches
 import java.util.Random; //Zufallzahlen für Spawnobjekte
+import javax.sound.sampled.*;
+import java.io.File;
 
 public class Main {
 
@@ -78,11 +80,15 @@ public class Main {
         int scoreCoinPoints = 10;
 
         //Bilder
-        private Image playerImage;
+        private Image playerImageNormal; //Player pic normal
+        private Image playerImagePower; //powerUp
         private Image fuelImage;
         private Image[] bg = new Image[3];
         private double[] bgX = new double[3];
         private Image[] obstacleImgs = new Image[3]; //Hindernisse
+
+        private Clip coinSound; //Münzensound
+        private Clip fuelSound;
 
         private double bgSpeedFactor = 0.5;
 
@@ -125,7 +131,7 @@ public class Main {
         double raketenGeschwindigkeitMax = 14.0;
 
         int raketeW = 80; //Raketen breite
-        int raketeH = 60; //höhe
+        int raketeH = 80; //höhe
 
         private Image raketenImage;
 
@@ -183,6 +189,26 @@ public class Main {
             }
         }
 
+        private void playSound(Clip clip) {
+            if (clip == null) return;
+            if (clip.isRunning()) clip.stop();
+            clip.setFramePosition(0);
+            clip.start();
+
+        }
+
+        private Clip loadSound(String path) {
+            try {
+                AudioInputStream ais = AudioSystem.getAudioInputStream(new File(path));
+                Clip clip = AudioSystem.getClip();
+                clip.open(ais);
+                return clip;
+            } catch (Exception e) {
+                System.out.println("Sound nicht geladen: " + path);
+                return null;
+            }
+        }
+
         //Konstruktor
         GamePanel(int w, int h) {
             this.W = w;
@@ -195,7 +221,9 @@ public class Main {
 
             resetGame();
 
-            playerImage = loadImage("assets/Screenshot 2026-02-02 101301-Photoroom.png"); //Player pic
+            playerImageNormal = loadImage("assets/Screenshot 2026-02-02 101301-Photoroom.png"); //Player pic
+            playerImagePower = new ImageIcon("assets/Power.gif").getImage();
+
             fuelImage = loadImage("assets/Pancakes.png"); //Benzin picture
 
             //Münzen bild
@@ -212,6 +240,9 @@ public class Main {
             obstacleImgs[0] = loadImage("assets/Rechner.png");
             obstacleImgs[1] = null;
             obstacleImgs[2] = null; //Hindernisse bild
+
+            coinSound = loadSound("assets/coin.wav"); //Coinsound
+            fuelSound = loadSound("assets/pancake.wav"); //Mamf
 
             // FIX: Timer ist javax.swing.Timer
             timer = new javax.swing.Timer(16, this); // ~60 FPS
@@ -385,6 +416,8 @@ public class Main {
                     benzin += benzinprogas;
                     if (benzin > voll) benzin = voll;
 
+                    playSound(fuelSound);
+
 
                 }
 
@@ -401,6 +434,8 @@ public class Main {
                     coinsGesammelt++;
                     coinScore += scoreCoinPoints;
                     checkPowerUpDrop();
+
+                    playSound(coinSound);
                 }
             }
 
@@ -495,8 +530,10 @@ public class Main {
             }
 
             // Player
-            if (playerImage != null) {
-                g2.drawImage(playerImage, (int) player.x, (int) player.y, player.w,player.h, null);
+            Image img = unsichtbarAktiv ? playerImagePower : playerImageNormal;
+
+            if (playerImageNormal != null) {
+                g2.drawImage(playerImageNormal, (int) player.x, (int) player.y, player.w,player.h, null);
             } else {
                 g2.setColor(new Color(90, 180, 255));
                 g2.fillRoundRect((int) player.x, (int) player.y, player.w, player.h, 10, 10);
