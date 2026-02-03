@@ -111,6 +111,8 @@ public class Main {
         private void activeStoredPowerUp() {
             if (storedPowerUp == null) return;
 
+            long now = System.currentTimeMillis();
+
             if (storedPowerUp.equals("Unsichtbar")) {
                 unsichtbarAktiv = true;
                 unsichtbarEndeMs = System.currentTimeMillis() + 5000;
@@ -119,8 +121,57 @@ public class Main {
                 playLoop(unsichtbarmusic);
             }
 
+            if (storedPowerUp.equals("Magnet")) {
+                magnetAktiv = true;
+                magnetEndeMs = now + 10000; //Dauer vom Magnet
+            }
+
             storedPowerUp = null;
 
+        }
+
+        private void applyMagnet(double px, double py, double dt) {
+            //Zielpunkt
+            double targetX = px + player.w / 2;
+            double targetY = py + player.h / 2;
+            //Pancakes
+            for (Fuel f : fuelPickups) {
+                if (f.collected) continue;
+
+                double cx = f.x + f.size / 2;
+                double cy = f.y + f.size / 2;
+
+                double dx = targetX - cx;
+                double dy = targetY - cy;
+                double dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 0 && dist <= magnetRange) {
+                    double nx = dx / dist;
+                    double ny = dy / dist;
+
+                    f.x += nx * magnetPull;
+                    f.y += ny * magnetPull;
+                }
+            }
+            //Coins
+            for (ScoreCoin sc : scoreCoins) {
+                if (sc.collected) continue;
+
+                double cx = sc.x + sc.size / 2;
+                double cy = sc.y + sc.size / 2;
+
+                double dx = targetX - cx;
+                double dy = targetY - cy;
+                double dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist > 0 && dist <= magnetRange) {
+                    double nx = dx / dist;
+                    double ny = dy / dist;
+
+                    sc.x += nx * magnetPull;
+                    sc.y += ny * magnetPull;
+                }
+            }
         }
 
         //Rakete
@@ -161,11 +212,20 @@ public class Main {
 
         //Powerups!!!
         private String storedPowerUp = null;
+        //Unsichtbar
         private boolean unsichtbarAktiv = false;
         private long unsichtbarEndeMs = 0;
 
         private int coinsGesammelt = 0;
         private int nächsterpowerUpAb = 10; // Münz check ab 10 20 usw
+
+        private boolean magnetAktiv = false;
+        private long magnetEndeMs = 0;
+
+        //Magnet settings!!!
+        private double magnetRange = 800; //Reichweite
+        private double magnetPull = 10.0; //Ziehstärkeeö
+
 
 
 
@@ -261,8 +321,8 @@ public class Main {
 
             coinSound = loadSound("assets/coin.wav"); //Coinsound
             fuelSound = loadSound("assets/pancake.wav"); //Mamf
-            unsichtbarmusic = loadSound("assets/PowerUp.wav"); //PowerUp
-            //bgMusic = loadSound("assets/Background.wav");
+            unsichtbarmusic = loadSound("assets/PowerUpNeu.wav"); //PowerUp
+            bgMusic = loadSound("assets/BackgroundBanger.wav");
 
             // FIX: Timer ist javax.swing.Timer
             timer = new javax.swing.Timer(16, this); // ~60 FPS
@@ -287,15 +347,19 @@ public class Main {
             coinScore = 0;
 
             storedPowerUp = null;
+
             unsichtbarAktiv = false;
             unsichtbarEndeMs = 0;
+
+            magnetAktiv = false;
+            magnetEndeMs = 0;
 
             stopSound(unsichtbarmusic);
             stopSound(bgMusic);
             playSound(bgMusic);
 
             coinsGesammelt = 0;
-            nächsterpowerUpAb = 10; // Anzahl der benötigten Münzen
+            nächsterpowerUpAb = 1; // Anzahl der benötigten Münzen
 
             long now = System.currentTimeMillis();
             lastObstacleSpawn = now;
@@ -343,8 +407,12 @@ public class Main {
             if (unsichtbarAktiv && now >= unsichtbarEndeMs) {
                 unsichtbarAktiv = false;
                 stopSound(unsichtbarmusic);
-
                 if (!gameOver) playLoop(bgMusic);
+            }
+
+            //Magnet endet
+            if (magnetAktiv && now >= magnetEndeMs) {
+                magnetAktiv = false;
             }
 
             if (dt < 0) dt = 0;
@@ -409,6 +477,11 @@ public class Main {
             for (ScoreCoin sc : scoreCoins) sc.x -= worldSpeed; // Münzen bewegung
 
             for (Rakete r : raketen) r.x += r.vx;
+
+            //PowerUp Magnet
+            if (magnetAktiv) {
+                applyMagnet(player.x, player.y, dt);
+            }
 
 
 
@@ -496,7 +569,9 @@ public class Main {
 
                 int chance = 100; //35 ist dann richtig
                 if (rnd.nextInt(100) < chance) {
-                    storedPowerUp = "Unsichtbar";
+
+                    if (rnd.nextBoolean()) storedPowerUp = "Unsichtbar";
+                    else storedPowerUp = "Magnet";
                 }
             }
         }
@@ -614,6 +689,11 @@ public class Main {
             if (unsichtbarAktiv) {
                 long left = Math.max(0, (unsichtbarEndeMs - System.currentTimeMillis()) / 1000);
                 g2.drawString("Unsichtbar: " + left + "s", 16, 128);
+            }
+
+            if (magnetAktiv) {
+                long left = Math.max(0, (magnetEndeMs - System.currentTimeMillis()) / 1000);
+                g2.drawString("Magnet: " + left + "s", 16, 146);
             }
 
             //bar
