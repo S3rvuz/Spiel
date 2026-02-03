@@ -9,18 +9,6 @@ public class Main {
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
-           /* JFrame f = new JFrame("Jetpack Runner (Beginner)");
-            f.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-            f.setResizable(false);
-
-            GamePanel panel = new GamePanel(900, 500);
-            f.setContentPane(panel);
-            f.pack();
-            f.setLocationRelativeTo(null);
-            f.setVisible(true);
-
-            panel.start(); */
-
             //Fullscreen
             JFrame frame = new JFrame("Jetpack Spiel");
             frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
@@ -47,7 +35,6 @@ public class Main {
 
     static class GamePanel extends JPanel implements ActionListener, KeyListener {
 
-
         final int W, H;
 
         double gravity = 0.60;
@@ -57,15 +44,16 @@ public class Main {
         double worldSpeed = 4.0;
         int groundMargin = 20;
 
-        int obstacleEveryMsMin = 250;
-        int obstacleEveryMsMax = 130;
-        int coinEveryMsMin = 60;
-        int coinEveryMsMax = 1100;
+        int obstacleEveryMsMin = 500; // Anzahl Hindernisse!
+        int obstacleEveryMsMax = 900;
 
-        int playerW = 35, playerH = 45;
+        int fuelEveryMsMin = 1700; //Anzahl Pancakes
+        int fuelEveryMsMax = 2800;
+
+        int playerW = 115, playerH = 135;
         int obstacleMinH = 30, obstacleMaxH = 140;
         int obstacleW = 18;
-        int coinSize = 14;
+        int fuelSize = 66;
         // =============================
 
         // FIX: explizit Swing Timer verwenden
@@ -75,29 +63,116 @@ public class Main {
 
         private Player player;
         private final List<Obstacle> obstacles = new ArrayList<>();
-        private final List<Coin> coins = new ArrayList<>();
+        private final List<Fuel> fuelPickups = new ArrayList<>();
+        private final List<ScoreCoin> scoreCoins = new ArrayList<>();
 
+        //Münzen
+        int scoreCoinEveryMsMin = 2000; // Anzahl Münzen
+        int scoreCoinEveryMsMax = 2800;
+
+        private long lastScoreCoinSpawn = 0;
+        private long nextScoreCoinInMs = 0;
+
+        private Image scoreCoinImage;
+        int scoreCoinSize = 50;
+        int scoreCoinPoints = 10;
+
+        //Bilder
         private Image playerImage;
+        private Image fuelImage;
+        private Image[] bg = new Image[3];
+        private double[] bgX = new double[3];
+        private Image[] obstacleImgs = new Image[3]; //Hindernisse
+
+        private double bgSpeedFactor = 0.5;
 
         private boolean jetOn = false;
         private boolean gameOver = false;
 
+        //Raketen
+        private void spawnRocket() {
+            int y = randBetween(0, H - groundMargin - raketeH);
+
+            double speed = raketenGeschwindigkeitMin + rnd.nextDouble() * (raketenGeschwindigkeitMax - raketenGeschwindigkeitMin);
+
+            double x = W + 50;
+
+            raketen.add(new Rakete(x, y, raketeW, raketeH, -speed));
+        }
+
+        private void activeStoredPowerUp() {
+            if (storedPowerUp == null) return;
+
+            if (storedPowerUp.equals("Unsichtbar")) {
+                unsichtbarAktiv = true;
+                unsichtbarEndeMs = System.currentTimeMillis() + 5000;
+            }
+
+            storedPowerUp = null;
+
+        }
+
+        //Rakete
+        private final List<Rakete> raketen = new ArrayList<>();
+
+        int raketeJedeMsMin = 700; //Spawnrate
+        int raketeJedeMsMax = 1400;
+
+        private long letzteRaketeSpawn = 0;
+        private long nächsteRaketeInMs = 0;
+
+        double raketenGeschwindigkeitMin = 8.0;
+        double raketenGeschwindigkeitMax = 14.0;
+
+        int raketeW = 80; //Raketen breite
+        int raketeH = 60; //höhe
+
+        private Image raketenImage;
+
         private long lastObstacleSpawn = 0;
         private long nextObstacleInMs = 0;
 
-        private long lastCoinSpawn = 0;
-        private long nextCoinInMs = 0;
+        private long lastFuelSpawn = 0;
+        private long nextFuelInMs = 0;
 
         private long startTime = 0;
         private int score = 0;
         private int coinScore = 0;
 
-        private double distSinceObstacle = 0;
-        private double nextObstancleDist = 0;
+        private double benzin;
+        private double voll = 100.0;
 
-        private double distSinceCoin = 0;
-        private double nextCoinDist = 0;
+        private double fueldrain = 8; //Benzin verlieren
 
+        private double benzinprogas = 20;
+
+        private long lastTickMs = 0;
+
+        //Powerups!!!
+        private String storedPowerUp = null;
+        private boolean unsichtbarAktiv = false;
+        private long unsichtbarEndeMs = 0;
+
+        private int coinsGesammelt = 0;
+        private int nächsterpowerUpAb = 10; // Münz check ab 10 20 usw
+
+
+
+
+        private void drawCover(Graphics2D g2, Image img, int x, int y, int w, int h) {
+            int iw = img.getWidth(null);
+            int ih = img.getHeight(null);
+            if (iw <= 0 || ih <= 0) return;
+
+            double scale = Math.max((double) w / iw, (double) h / ih);
+            int dw = (int) (iw * scale);
+            int dh = (int) (ih * scale);
+
+            int dx = x + (w - dw) / 2;
+            int dy = y + (h - dh) / 2;
+
+            g2.drawImage(img, dx, dy, dw, dh, null);
+        }
 
         private Image loadImage(String path) {
             try {
@@ -108,7 +183,7 @@ public class Main {
             }
         }
 
-            //Konstruktor
+        //Konstruktor
         GamePanel(int w, int h) {
             this.W = w;
             this.H = h;
@@ -120,7 +195,23 @@ public class Main {
 
             resetGame();
 
-            playerImage = loadImage("assets/Screenshot 2026-02-02 101301-Photoroom.png");
+            playerImage = loadImage("assets/Screenshot 2026-02-02 101301-Photoroom.png"); //Player pic
+            fuelImage = loadImage("assets/Pancakes.png"); //Benzin picture
+
+            //Münzen bild
+            scoreCoinImage = loadImage("assets/Münze.png");
+
+            bg[0] = loadImage("assets/Background.png"); //Hintergünde
+            bg[1] = loadImage("assets/Background.png");
+            bg[2] = loadImage("assets/Background.png");
+
+
+            //Raketen bild
+            raketenImage = loadImage("assets/Rocket_card_render_1.png");
+
+            obstacleImgs[0] = loadImage("assets/Rechner.png");
+            obstacleImgs[1] = null;
+            obstacleImgs[2] = null; //Hindernisse bild
 
             // FIX: Timer ist javax.swing.Timer
             timer = new javax.swing.Timer(16, this); // ~60 FPS
@@ -134,26 +225,47 @@ public class Main {
         private void resetGame() {
             player = new Player(120, H / 2.0, playerW, playerH);
             obstacles.clear();
-            coins.clear();
+            fuelPickups.clear();
+            scoreCoins.clear();
             jetOn = false;
             gameOver = false;
+
 
             startTime = System.currentTimeMillis();
             score = 0;
             coinScore = 0;
 
+            storedPowerUp = null;
+            unsichtbarAktiv = false;
+            unsichtbarEndeMs = 0;
+
+            coinsGesammelt = 0;
+            nächsterpowerUpAb = 10;
+
             long now = System.currentTimeMillis();
             lastObstacleSpawn = now;
             nextObstacleInMs = randBetween(obstacleEveryMsMin, obstacleEveryMsMax);
 
-            lastCoinSpawn = now;
-            nextCoinInMs = randBetween(coinEveryMsMin, coinEveryMsMax);
+            lastFuelSpawn = now;
+            nextFuelInMs = randBetween(fuelEveryMsMin, fuelEveryMsMax);
 
-            distSinceObstacle = 0;
-            nextObstancleDist = randBetween(320, 520);
+            benzin = 60.0; //60% startleben
+            voll = 100;
 
-            distSinceCoin = 0;
-            nextCoinDist = randBetween(220, 420);
+            lastScoreCoinSpawn = now;
+            nextScoreCoinInMs = randBetween(scoreCoinEveryMsMin, scoreCoinEveryMsMax);
+
+
+            lastTickMs = System.currentTimeMillis();
+
+            bgX[0] = 0;
+            bgX[1] = W;
+            bgX[2] = 2 * W;
+
+            raketen.clear();
+
+            letzteRaketeSpawn = now;
+            nächsteRaketeInMs = randBetween(raketeJedeMsMin, raketeJedeMsMax);
         }
 
         private int randBetween(int a, int b) {
@@ -167,7 +279,27 @@ public class Main {
         }
 
         private void updateWorld() {
-            if (jetOn) player.vy -= thrust;
+
+            long now = System.currentTimeMillis();
+            double dt = (now - lastTickMs) /  1000.0;
+            lastTickMs = now;
+
+            //1. Powerups Uncihtbar!!
+            if (unsichtbarAktiv && now >= unsichtbarEndeMs) {
+                unsichtbarAktiv = false;
+            }
+
+            if (dt < 0) dt = 0;
+            if (dt > 0.1) dt = 0.1;
+
+            boolean kanister = jetOn && benzin > 0;
+
+            if (kanister) {
+                player.vy -= thrust;
+
+                benzin -= fueldrain * dt;
+                if (benzin < 0) benzin = 0;
+            }
             player.vy += gravity;
 
             if (player.vy > maxVy) player.vy = maxVy;
@@ -184,8 +316,15 @@ public class Main {
                 player.y = bottom;
                 player.vy = 0;
             }
+            double bgSpeed = worldSpeed * bgSpeedFactor;
 
-            long now = System.currentTimeMillis();
+            for(int i = 0; i < 3; i++) {
+                bgX[i] -= bgSpeed;
+
+                if(bgX[i] <= -W) {
+                    bgX[i] += 3 * W;
+                }
+            }
 
             if (now - lastObstacleSpawn >= nextObstacleInMs) {
                 spawnObstacle();
@@ -193,45 +332,75 @@ public class Main {
                 nextObstacleInMs = randBetween(obstacleEveryMsMin, obstacleEveryMsMax);
             }
 
-            if (now - lastCoinSpawn >= nextCoinInMs) {
-                spawnCoin();
-                lastCoinSpawn = now;
-                nextCoinInMs = randBetween(coinEveryMsMin, coinEveryMsMax);
+            if (now - lastFuelSpawn >= nextFuelInMs) {
+                spawnFuel();
+                lastFuelSpawn = now;
+                nextFuelInMs = randBetween(fuelEveryMsMin, fuelEveryMsMax);
             }
 
-            //Spawnrate erhöhen
-           /* distSinceObstacle += worldSpeed;
-            distSinceCoin += worldSpeed;
-
-            if (distSinceObstacle >= nextObstacleInMs) {
-                spawnObstacle();
-                distSinceObstacle = 0;
-                nextObstancleDist = randBetween(10, 15);
+            if (now - lastScoreCoinSpawn >= nextScoreCoinInMs) {
+                spawnScoreCoin();
+                lastScoreCoinSpawn = now;
+                nextScoreCoinInMs = randBetween(scoreCoinEveryMsMin, scoreCoinEveryMsMax);
             }
-            if (distSinceCoin >= nextCoinDist) {
-                spawnCoin();
-                distSinceCoin = 0;
-                nextCoinDist = randBetween(220, 420);
-            } */
 
             for (Obstacle ob : obstacles) ob.x -= worldSpeed;
-            for (Coin c : coins) c.x -= worldSpeed;
+
+            for (Fuel f : fuelPickups) f.x -= worldSpeed;
+
+            for (ScoreCoin sc : scoreCoins) sc.x -= worldSpeed; // Münzen bewegung
+
+            for (Rakete r : raketen) r.x += r.vx;
+
+
 
             obstacles.removeIf(ob -> ob.x + ob.w < 0);
-            coins.removeIf(c -> c.x + c.size < 0 || c.collected);
+            fuelPickups.removeIf(f -> f.x + f.size < 0 || f.collected);
+            scoreCoins.removeIf(sc -> sc.x + sc.size < 0 || sc.collected);
+            raketen.removeIf(r -> r.x + r.w < 0);
 
             Rectangle pr = player.rect();
             for (Obstacle ob : obstacles) {
                 if (pr.intersects(ob.rect())) {
+                    if (!unsichtbarAktiv) {
                     gameOver = true;
                     return;
+                    }
                 }
             }
 
-            for (Coin c : coins) {
-                if (!c.collected && pr.intersects(c.rect())) {
-                    c.collected = true;
-                    coinScore += 10;
+            for (Rakete r : raketen) {
+                if (pr.intersects(r.rect())) {
+                    if (!unsichtbarAktiv) {
+                    gameOver = true;
+                    return;
+                    }
+                }
+            }
+
+            for (Fuel f : fuelPickups) {
+                if (!f.collected && pr.intersects(f.rect())) {
+                    f.collected = true;
+
+                    benzin += benzinprogas;
+                    if (benzin > voll) benzin = voll;
+
+
+                }
+
+                if (now - letzteRaketeSpawn >= nächsteRaketeInMs) {
+                    spawnRocket();
+                    letzteRaketeSpawn = now;
+                    nächsteRaketeInMs = randBetween(raketeJedeMsMin, raketeJedeMsMax);
+                }
+            }
+            for (ScoreCoin sc : scoreCoins) {
+                if (!sc.collected && pr.intersects(sc.rect())) {
+                    sc.collected = true;
+
+                    coinsGesammelt++;
+                    coinScore += scoreCoinPoints;
+                    checkPowerUpDrop();
                 }
             }
 
@@ -242,12 +411,33 @@ public class Main {
         private void spawnObstacle() {
             int h = randBetween(obstacleMinH, obstacleMaxH);
             int y = randBetween(0, (H - groundMargin - h));
-            obstacles.add(new Obstacle(W + 30, y, obstacleW, h));
+
+            int imgIdx = 0;
+
+            obstacles.add(new Obstacle(W + 30, y, obstacleW, h, imgIdx));
         }
 
-        private void spawnCoin() {
-            int y = randBetween(0, H - groundMargin - coinSize);
-            coins.add(new Coin(W + 30, y, coinSize));
+        private void spawnFuel() {
+            int y = randBetween(0, H - groundMargin - fuelSize);
+            fuelPickups.add(new Fuel(W + 30, y, fuelSize));
+        }
+
+        private void checkPowerUpDrop() {
+            if (storedPowerUp != null) return;
+
+            if (coinsGesammelt >= nächsterpowerUpAb) {
+                nächsterpowerUpAb += 10; //Alle 10 Münzen ein Powerup
+
+                int chance = 100; //35 ist dann richtig
+                if (rnd.nextInt(100) < chance) {
+                    storedPowerUp = "Unsichtbar";
+                }
+            }
+        }
+
+        private void spawnScoreCoin() {
+            int y = randBetween(0, H - groundMargin - scoreCoinSize);
+            scoreCoins.add(new ScoreCoin(W + 30, y, scoreCoinSize));
         }
 
         @Override
@@ -255,58 +445,127 @@ public class Main {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g;
 
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            if (bg[0] != null && bg[1] != null && bg[2] != null) {
+                for (int i = 0; i < 3; i++) {
+                    drawCover(g2, bg[i], (int) bgX[i], 0, W, H);
+                }
+            } else {
+                g2.setColor(new Color(15, 18, 30));
+                g2.fillRect(0, 0, W, H);
+            }
 
-            // Background
-            GradientPaint gp = new GradientPaint(0, 0, new Color(15, 18, 30), 0, H, new Color(10, 12, 22));
-            g2.setPaint(gp);
-            g2.fillRect(0, 0, W, H);
-            g2.setPaint(null);
+            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
             // Ground
             g2.setColor(new Color(40, 45, 70));
             g2.fillRect(0, H - groundMargin, W, groundMargin);
 
-            // Coins
-            for (Coin c : coins) {
-                g2.setColor(new Color(255, 210, 80));
-                g2.fillOval((int) c.x, (int) c.y, c.size, c.size);
+            // Fuel
+            for (Fuel f : fuelPickups) {
+                if (fuelImage != null) {
+                    g2.drawImage(fuelImage, (int) f.x, (int) f.y, f.size, f.size, null);
+                } else {
+                    g2.setColor(new Color(40, 45, 70));
+                    g2.drawRect((int) f.x, (int) f.y, f.size, f.size);
+                }
+            }
+
+            for (ScoreCoin sc : scoreCoins) {
+                if (scoreCoinImage != null) {
+                    g2.drawImage(scoreCoinImage, (int) sc.x, (int) sc.y, sc.size, sc.size, null);
+                } else {
+                    g2.setColor(Color.YELLOW);
+                    g2.fillOval((int) sc.x, (int) sc.y, sc.size, sc.size);
+                }
             }
 
             // Obstacles
             for (Obstacle ob : obstacles) {
+                Image img = obstacleImgs[ob.imgIndex];
+
+                if (img != null) {
+                    g2.drawImage(img, (int) ob.x, (int) ob.y, ob.w, ob.h, null);
+                } else {
+                    g2.setColor(new Color(255, 90, 70));
+                    g2.fillRoundRect((int) ob.x, (int) ob.y, ob.w, ob.h, 5, 5);
+                }
+
                 g2.setColor(new Color(255, 90, 110));
                 g2.fillRoundRect((int) ob.x, (int) ob.y, ob.w, ob.h, 6, 6);
             }
 
             // Player
-           // g2.setColor(new Color(90, 180, 255));
-           // g2.fillRoundRect((int) player.x, (int) player.y, player.w, player.h, 10, 10);
-
             if (playerImage != null) {
                 g2.drawImage(playerImage, (int) player.x, (int) player.y, player.w,player.h, null);
             } else {
                 g2.setColor(new Color(90, 180, 255));
                 g2.fillRoundRect((int) player.x, (int) player.y, player.w, player.h, 10, 10);
             }
+            // DEBUG HITBOX
+            g2.setColor(new Color(0, 255, 0, 120));
+            Rectangle hb = player.rect();
+            g2.fillRect(hb.x, hb.y, hb.width, hb.height);
+
 
             // Jet flame
-            if (jetOn && !gameOver) {
+            if (jetOn && benzin > 0 && !gameOver) {
                 g2.setColor(new Color(255, 140, 60));
                 int fx = (int) player.x - 1;
-                int fy = (int) (player.y + player.h * 0.6);
-                g2.fillOval(fx, fy, 10, 50);
+                int fy = (int) (player.y + player.h * 0.8);
+                g2.fillOval(fx, fy, 25, 60);
+            }
+
+            for (Rakete r : raketen) {
+                if (raketenImage != null) {
+                    g2.drawImage(raketenImage, (int) r.x, (int) r.y, r.w, r.h, null);
+                } else {
+                    g2.setColor(Color.LIGHT_GRAY);
+                    g2.fillRoundRect((int) r.x, (int) r.y, r.w, r.h, 10, 10);
+                    g2.setColor(Color.RED);
+                    g2.fillOval((int) (r.x + r.w - 14), (int) (r.y + r.h/2 - 4), 8, 8);
+                }
             }
 
             // HUD
             g2.setColor(Color.RED);
             g2.setFont(new Font("Consolas", Font.BOLD, 16));
             g2.drawString("Score: " + score, 16, 26);
-            g2.drawString("Coins: " + (coinScore / 10), 16, 48);
+            g2.drawString("Münzen: " + (coinScore / 10), 16, 48);
             g2.setFont(new Font("Consolas", Font.PLAIN, 12));
             g2.drawString("SPACE = jetpack | R = restart", 16, 70);
             g2.setFont(new Font("Consolas", Font.PLAIN, 12));
             g2.drawString("QUIT | ESC", 16, 90);
+            //Powerup HUD
+            g2.setFont(new Font("Consolas", Font.PLAIN, 12));
+            if (storedPowerUp != null) {
+                g2.drawString("PowerUp: " + storedPowerUp + " (E)", 16, 110);
+            } else {
+                g2.drawString("PowerUp: -", 16, 110);
+            }
+
+            if (unsichtbarAktiv) {
+                long left = Math.max(0, (unsichtbarEndeMs - System.currentTimeMillis()) / 1000);
+                g2.drawString("Unsichtbar: " + left + "s", 16, 128);
+            }
+
+            //bar
+            int barX = 465;
+            int barY = 30;
+            int barW = 1000;
+            int barH = 20;
+
+            g2.setColor(Color.WHITE);
+            g2.drawRect(barX, barY, barW, barH);
+
+            double benzinRatio = (voll <= 0) ? 0 : (benzin / voll);
+            int fillW = (int) (barW * benzinRatio);
+
+            g2.setColor(new Color(255, 234, 0));
+            g2.fillRect(barX + 1, barY + 1, Math.max(0, fillW - 1), barH - 1);
+
+            g2.setFont(new Font("Monospaced", Font.PLAIN, 20));
+            g2.setColor(Color.RED);
+            g2.drawString("BENZIN", barX, barY - 4);
 
             if (gameOver) {
                 g2.setColor(new Color(0, 0, 0, 160));
@@ -333,13 +592,19 @@ public class Main {
         @Override
         public void keyPressed(KeyEvent e) {
             if (e.getKeyCode() == KeyEvent.VK_SPACE) jetOn = true;
+            if (e.getKeyCode() == KeyEvent.VK_W) jetOn = true;
+
             if (e.getKeyCode() == KeyEvent.VK_R) resetGame();
             if (e.getKeyCode() == KeyEvent.VK_ESCAPE) System.exit(0);
+            if (e.getKeyCode() == KeyEvent.VK_E) {
+                activeStoredPowerUp();
+            }
         }
 
         @Override
         public void keyReleased(KeyEvent e) {
             if (e.getKeyCode() == KeyEvent.VK_SPACE) jetOn = false;
+            if (e.getKeyCode() == KeyEvent.VK_W) jetOn = false;
         }
     }
 
@@ -348,21 +613,34 @@ public class Main {
         int w, h;
         double vy = 0;
 
+        int hitboxOffsetX = 25;
+        int hitboxOffsetY = 15;
+        int hitboxW = 85;
+        int hitboxH = 93;
+
         Player(double x, double y, int w, int h) {
-            this.x = x; this.y = y; this.w = w; this.h = h;
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
         }
 
         Rectangle rect() {
-            return new Rectangle((int) x, (int) y, w, h);
+            return new Rectangle((int) x + hitboxOffsetX, (int) y + hitboxOffsetY, hitboxW, hitboxH); //Viereck
         }
     }
 
     static class Obstacle {
         double x, y;
         int w, h;
+        int imgIndex;
 
-        Obstacle(double x, double y, int w, int h) {
-            this.x = x; this.y = y; this.w = w; this.h = h;
+        Obstacle(double x, double y, int w, int h,int imgIndex) {
+            this.x = x;
+            this.y = y;
+            this.w = w;
+            this.h = h;
+            this.imgIndex = imgIndex;
         }
 
         Rectangle rect() {
@@ -370,17 +648,45 @@ public class Main {
         }
     }
 
-    static class Coin {
+    static class Fuel {
         double x, y;
         int size;
         boolean collected = false;
 
-        Coin(double x, double y, int size) {
+        Fuel(double x, double y, int size) {
             this.x = x; this.y = y; this.size = size;
         }
 
         Rectangle rect() {
             return new Rectangle((int) x, (int) y, size, size);
+        }
+    }
+
+    static class ScoreCoin {
+        double x, y;
+        int size;
+        boolean collected = false;
+
+        ScoreCoin(double x, double y, int size) {
+            this.x = x; this.y = y; this.size = size; //Konstrktor
+        }
+
+        Rectangle rect() {
+            return new Rectangle((int) x, (int) y, size, size);
+        }
+    }
+
+    static class Rakete {
+        double x, y;
+        int w, h;
+        double vx;
+
+        Rakete(double x, double y, int w, int h, double vx) {
+            this.x = x; this.y = y; this.w = w; this.h = h; this.vx = vx;
+        }
+
+        Rectangle rect() {
+            return new Rectangle((int) x, (int) y, w, h);
         }
     }
 }
