@@ -89,6 +89,8 @@ public class Main {
 
         private Clip coinSound; //Münzensound
         private Clip fuelSound;
+        private Clip unsichtbarmusic;
+        private Clip bgMusic;
 
         private double bgSpeedFactor = 0.5;
 
@@ -112,6 +114,9 @@ public class Main {
             if (storedPowerUp.equals("Unsichtbar")) {
                 unsichtbarAktiv = true;
                 unsichtbarEndeMs = System.currentTimeMillis() + 5000;
+
+               stopSound(bgMusic);
+                playLoop(unsichtbarmusic);
             }
 
             storedPowerUp = null;
@@ -209,6 +214,19 @@ public class Main {
             }
         }
 
+        private void playLoop(Clip clip) {
+            if (clip == null) return;
+            if (clip.isRunning()) clip.stop();
+            clip.setFramePosition(0);
+            clip.loop(Clip.LOOP_CONTINUOUSLY);
+        }
+
+        private void stopSound(Clip clip) {
+            if (clip == null) return;
+            clip.stop();
+            clip.setFramePosition(0);
+        }
+
         //Konstruktor
         GamePanel(int w, int h) {
             this.W = w;
@@ -243,6 +261,8 @@ public class Main {
 
             coinSound = loadSound("assets/coin.wav"); //Coinsound
             fuelSound = loadSound("assets/pancake.wav"); //Mamf
+            unsichtbarmusic = loadSound("assets/PowerUp.wav"); //PowerUp
+            //bgMusic = loadSound("assets/Background.wav");
 
             // FIX: Timer ist javax.swing.Timer
             timer = new javax.swing.Timer(16, this); // ~60 FPS
@@ -270,8 +290,12 @@ public class Main {
             unsichtbarAktiv = false;
             unsichtbarEndeMs = 0;
 
+            stopSound(unsichtbarmusic);
+            stopSound(bgMusic);
+            playSound(bgMusic);
+
             coinsGesammelt = 0;
-            nächsterpowerUpAb = 10;
+            nächsterpowerUpAb = 10; // Anzahl der benötigten Münzen
 
             long now = System.currentTimeMillis();
             lastObstacleSpawn = now;
@@ -318,6 +342,9 @@ public class Main {
             //1. Powerups Uncihtbar!!
             if (unsichtbarAktiv && now >= unsichtbarEndeMs) {
                 unsichtbarAktiv = false;
+                stopSound(unsichtbarmusic);
+
+                if (!gameOver) playLoop(bgMusic);
             }
 
             if (dt < 0) dt = 0;
@@ -395,6 +422,8 @@ public class Main {
                 if (pr.intersects(ob.rect())) {
                     if (!unsichtbarAktiv) {
                     gameOver = true;
+                    stopSound(bgMusic);
+                    stopSound(unsichtbarmusic);
                     return;
                     }
                 }
@@ -404,6 +433,8 @@ public class Main {
                 if (pr.intersects(r.rect())) {
                     if (!unsichtbarAktiv) {
                     gameOver = true;
+                    stopSound(bgMusic);
+                    stopSound(unsichtbarmusic);
                     return;
                     }
                 }
@@ -532,8 +563,8 @@ public class Main {
             // Player
             Image img = unsichtbarAktiv ? playerImagePower : playerImageNormal;
 
-            if (playerImageNormal != null) {
-                g2.drawImage(playerImageNormal, (int) player.x, (int) player.y, player.w,player.h, null);
+            if (img != null) {
+                g2.drawImage(img, (int) player.x, (int) player.y, player.w,player.h, null);
             } else {
                 g2.setColor(new Color(90, 180, 255));
                 g2.fillRoundRect((int) player.x, (int) player.y, player.w, player.h, 10, 10);
