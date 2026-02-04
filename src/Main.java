@@ -37,11 +37,104 @@ public class Main {
 
     static class GamePanel extends JPanel implements ActionListener, KeyListener {
 
+        private void drawMenu(Graphics2D g2) {
+           /* g2.setColor(Color.RED);
+            g2.fillRect(0, 0, WIDTH, HEIGHT); */
+            if (menuBg != null) {
+                drawCover(g2, menuBg, 0, 0, W, H);
+            } else {
+                g2.setColor(Color.BLACK);
+                g2.fillRect(0, 0, W, H);
+            }
+            g2.setColor(new Color(0, 0, 0, 120));
+            g2.fillRect(0, 0, W, H);
+
+            g2.setFont(new Font("Consolas", Font.BOLD, 52));
+            g2.setColor(Color.WHITE);
+            String title = "Auf dem Sitz das Spiel!";
+            int tw = g2.getFontMetrics().stringWidth(title);
+            g2.drawString(title, (W - tw) / 2, 160);
+
+            g2.setFont(new Font("Consolas", Font.PLAIN,26));
+            int startY = 260;
+            int gap = 50;
+
+            for (int i = 0; i < meniItems.length; i++) {
+                boolean selected = (i == menuIndex);
+                g2.setColor(selected ? Color.GREEN : Color.RED);
+                String line = (selected ? "> " : " ") + meniItems[i];
+                int lw = g2.getFontMetrics().stringWidth(line);
+                g2.drawString(line, (W - lw) / 2, startY + i * gap);
+            }
+
+            g2.setFont(new Font("Consolas", Font.PLAIN,16));
+            g2.setColor(Color.WHITE);
+            String hint = "Up/Down = Auswahl | ENTER = OK";
+            int hw = g2.getFontMetrics().stringWidth(hint);
+            g2.drawString(hint, (W - hw) / 2, H - 80);
+
+        }
+        private void drawHighscoreScreen(Graphics2D g2) {
+            g2.setColor(Color.RED);
+            g2.fillRect(0, 0, W, H);
+
+            g2.setFont(new Font("consolas", Font.BOLD, 48));
+            g2.setColor(Color.WHITE);
+            String t = "HIGHSCORE";
+            int tw = g2.getFontMetrics().stringWidth(t);
+            g2.drawString(t, (W - tw) / 2, 180);
+
+            g2.setFont(new Font("consolas", Font.BOLD,34));
+            String hs = String.valueOf(highscore);
+            int hw = g2.getFontMetrics().stringWidth(hs);
+            g2.drawString(hs, (W - hw) / 2, 260);
+
+            g2.setFont(new Font("Consolas", Font.PLAIN, 18));
+            String back = "ESC oder BACKSPACE = zurück";
+            int bw = g2.getFontMetrics().stringWidth(back);
+            g2.drawString(back, (W - bw) / 2, H - 80);
+        }
+
+        private void drawCharacterScreen(Graphics2D g2) {
+            g2.setColor(new Color(0, 0, 0, 170));
+            g2.fillRect(0, 0, W, H);
+
+            g2.setFont(new Font("Consolas", Font.BOLD, 42));
+            g2.setColor(Color.WHITE);
+            String t = "CHARAKTERWAHL";
+            int tw = g2.getFontMetrics().stringWidth(t);
+            g2.drawString(t, (W - tw) / 2, 180);
+
+            g2.setFont(new Font("Consolas", Font.PLAIN, 20));
+            g2.setColor(Color.LIGHT_GRAY);
+            String info = "koks"; //Muss noch gemacht werden
+            int iw = g2.getFontMetrics().stringWidth(info);
+            g2.drawString(info, (W - iw) / 2, 250);
+
+            String back = "ESC = zurück";
+            int bw = g2.getFontMetrics().stringWidth(back);
+            g2.drawString(back, (W - bw) / 2, H - 80);
+        }
+
+
+        enum GameState{MENU, RUNNING, HIGHSCORE, CHARACTER}
+        private GameState state = GameState.MENU;
+
+        private String[] meniItems = {"Spiel starten", "Highscore", "Character wählen", "Spiel beenden"};
+
+        private int menuIndex = 0;
+
+        //RAM Variante
+        private int highscore = 0;
+
+        private long gameOverEndMs = 0;
+
+
         final int W, H;
 
-        double gravity = 0.60;
-        double thrust  = 1.10;
-        double maxVy   = 10.0;
+        double gravity = 0.30;
+        double thrust  = 0.60;
+        double maxVy   = 6.0;
 
         //Worldspeed========================
         double baseWorldSpeed = 4.0; //startgeschwindigkeit
@@ -67,7 +160,6 @@ public class Main {
         private javax.swing.Timer timer;
 
         private final Random rnd = new Random();
-
         private Player player;
         private final List<Obstacle> obstacles = new ArrayList<>();
         private final List<Fuel> fuelPickups = new ArrayList<>();
@@ -91,12 +183,19 @@ public class Main {
         private Image[] bg = new Image[3];
         private double[] bgX = new double[3];
         private Image[] obstacleImgs = new Image[3]; //Hindernisse
+        private Image menuBg;
 
         private Clip coinSound; //Münzensound
         private Clip fuelSound; //Mamf
         private Clip unsichtbarmusic;
         private Clip bgMusic;
         private Clip jetpacksound;
+        private Clip deathSound;
+
+        private boolean totAnim = false;
+        private boolean deathSoundPlayed = false;
+
+        private double deathFallboost = 1.4;
 
         private boolean jetpacksoundPlaying = false;
 
@@ -331,6 +430,42 @@ public class Main {
             jetpacksoundPlaying = false;
         }
 
+        private void gehZurück() {
+            totAnim = false;
+            deathSoundPlayed = false;
+            state = GameState.MENU;
+
+            gameOver = false;
+            jetOn = false;
+            stopJetpackSound();
+            stopSound(bgMusic);
+            stopSound(unsichtbarmusic);
+
+            obstacles.clear();
+            fuelPickups.clear();
+            scoreCoins.clear();
+            raketen.clear();
+        }
+
+        private void triggerGameOver() {
+            if (gameOver) return;
+
+            gameOver = true;
+            gameOverEndMs = System.currentTimeMillis() + 5000; //Länge vom Gameover screen
+
+            highscore = Math.max(highscore, score);
+
+            jetOn = false;
+            stopJetpackSound();
+            stopSound(bgMusic);
+            stopSound(unsichtbarmusic);
+
+            totAnim = true;
+            deathSoundPlayed = false;
+
+            player.vy = 2.0; //fallgeschwindigkeit
+        }
+
         //Konstruktor
         GamePanel(int w, int h) {
             this.W = w;
@@ -354,6 +489,8 @@ public class Main {
             bg[1] = loadImage("assets/ost_ost.png");
             bg[2] = loadImage("assets/ost_ost.png");
 
+            menuBg = loadImage("assets/MenuBg.png");
+
 
             //Raketen bild
             raketenImage = loadImage("assets/Rocket_card_render_1.png");
@@ -367,6 +504,7 @@ public class Main {
             unsichtbarmusic = loadSound("assets/PowerUpNeu.wav"); //PowerUp
             bgMusic = loadSound("assets/BackgroundBanger.wav");
             jetpacksound = loadSound("assets/Jetpack.wav");
+            deathSound = loadSound("assets/GameOver.wav");
 
             resetGame();
 
@@ -377,9 +515,12 @@ public class Main {
         void start() {
             requestFocusInWindow();
             timer.start();
+            repaint();
         }
 
         private void resetGame() {
+            totAnim = false;
+            deathSoundPlayed = false;
             stopJetpackSound();
             obstacleEveryMsMin = 500;
             obstacleEveryMsMax = 900;
@@ -444,7 +585,23 @@ public class Main {
 
         @Override
         public void actionPerformed(ActionEvent e) {
-            if (!gameOver) updateWorld();
+
+            if (state == GameState.RUNNING && !gameOver) {
+                updateWorld();
+            }
+
+            if (state == GameState.RUNNING && gameOver) {
+                updateDeathAnimation();
+            }
+
+            if (gameOver && System.currentTimeMillis() >= gameOverEndMs) {
+                gehZurück();
+                repaint();
+                return;
+            }
+            if (state == GameState.RUNNING && !gameOver) {
+                updateWorld();
+            }
             repaint();
         }
 
@@ -561,10 +718,14 @@ public class Main {
             for (Obstacle ob : obstacles) {
                 if (pr.intersects(ob.rect())) {
                     if (!unsichtbarAktiv) {
-                    gameOver = true;
+                  /*  gameOver = true;
+                    highscore = Math.max(highscore, score);
                     stopJetpackSound();
                     stopSound(bgMusic);
                     stopSound(unsichtbarmusic);
+                    return; */
+                    highscore = Math.max(highscore, score);
+                    triggerGameOver();
                     return;
                     }
                 }
@@ -573,11 +734,15 @@ public class Main {
             for (Rakete r : raketen) {
                 if (pr.intersects(r.rect())) {
                     if (!unsichtbarAktiv) {
-                    gameOver = true;
+                    /*gameOver = true;
+                    highscore = Math.max(highscore, score);
                     stopJetpackSound();
                     stopSound(bgMusic);
                     stopSound(unsichtbarmusic);
-                    return;
+                    return; */
+                        highscore = Math.max(highscore, score);
+                        triggerGameOver();
+                        return;
                     }
                 }
             }
@@ -630,6 +795,25 @@ public class Main {
             obstacleEveryMsMax = Math.max(450, 900 + level * 25);
         }
 
+        private void updateDeathAnimation() {
+            player.x -= 5.5;
+            if (!totAnim) return;
+
+            if (!deathSoundPlayed) {
+                playSound(deathSound);
+                deathSoundPlayed = true;
+            }
+
+            player.vy += gravity * deathFallboost;
+            if (player.vy > 25) player.vy = 25;
+
+            player.y += player.vy;
+
+            if (player.y > H + 300) {
+                totAnim = false;
+            }
+        }
+
         private void spawnObstacle() {
             int h = randBetween(obstacleMinH, obstacleMaxH);
             int y = randBetween(0, (H - groundMargin - h));
@@ -673,6 +857,19 @@ public class Main {
             super.paintComponent(g);
             Graphics2D g2 = (Graphics2D) g;
 
+            if (state == GameState.MENU) {
+                drawMenu(g2);
+                return;
+            }
+            if (state == GameState.HIGHSCORE) {
+                drawHighscoreScreen(g2);
+                return;
+            }
+            if (state == GameState.CHARACTER) {
+                drawCharacterScreen(g2);
+                return;
+            }
+
             if (bg[0] != null && bg[1] != null && bg[2] != null) {
                 for (int i = 0; i < 3; i++) {
                     drawCover(g2, bg[i], (int) bgX[i], 0, W, H);
@@ -680,6 +877,18 @@ public class Main {
             } else {
                 g2.setColor(new Color(15, 18, 30));
                 g2.fillRect(0, 0, W, H);
+            }
+            if (state == GameState.MENU) {
+                drawMenu(g2);
+                return;
+            }
+            if (state == GameState.HIGHSCORE) {
+                drawHighscoreScreen(g2);
+                return;
+            }
+            if (state == GameState.CHARACTER) {
+                drawCharacterScreen(g2);
+                return;
             }
 
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
@@ -830,12 +1039,54 @@ public class Main {
                 g2.drawString(s1, (W - w1) / 2, H / 2 + 15);
                 g2.drawString(s2, (W - w2) / 2, H / 2 + 45);
             }
+            if (state == GameState.MENU) {
+                drawMenu(g2);
+                return;
+            }
+            if (state == GameState.HIGHSCORE) {
+                drawHighscoreScreen(g2);
+                return;
+            }
+            if (state == GameState.CHARACTER) {
+                drawCharacterScreen(g2);
+                return;
+            }
         }
 
         @Override public void keyTyped(KeyEvent e) {}
 
         @Override
         public void keyPressed(KeyEvent e) {
+            //==MENÜ Steuerung==
+            if (state == GameState.MENU) {
+                if (e.getKeyCode() == KeyEvent.VK_UP) {
+                    menuIndex = (menuIndex -1 + meniItems.length) % meniItems.length;
+                } else if (e.getKeyCode() == KeyEvent.VK_DOWN) {
+                    menuIndex = (menuIndex + 1) % meniItems.length;
+                } else if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                    if (menuIndex == 0) { //Start
+                        state = GameState.RUNNING;
+                        resetGame();
+                    } else if (menuIndex == 1) { //Highscore
+                        state = GameState.HIGHSCORE;
+                    } else if (menuIndex == 2) {
+                        state = GameState.CHARACTER;
+                    } else if (menuIndex == 3) {
+                        System.exit(0);
+                    }
+                } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                    System.exit(0);
+                }
+                return;
+            }
+            if (state == GameState.HIGHSCORE || state == GameState.CHARACTER) {
+                if (e.getKeyCode() == KeyEvent.VK_ESCAPE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                    state = GameState.MENU;
+                }
+                return;
+            }
+
+            //==(Game Steuerung)====
             if (e.getKeyCode() == KeyEvent.VK_SPACE) jetOn = true;
             if (e.getKeyCode() == KeyEvent.VK_W) jetOn = true;
 
