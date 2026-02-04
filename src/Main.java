@@ -43,7 +43,12 @@ public class Main {
         double thrust  = 1.10;
         double maxVy   = 10.0;
 
-        double worldSpeed = 4.0;
+        //Worldspeed========================
+        double baseWorldSpeed = 4.0; //startgeschwindigkeit
+        double speedstep = 1; //+1 Geschwindigkeit pro 1000
+        double maxWorldSpeed = 1400.0;
+        double worldSpeed = baseWorldSpeed;
+
         int groundMargin = 20;
 
         int obstacleEveryMsMin = 500; // Anzahl Hindernisse!
@@ -88,9 +93,12 @@ public class Main {
         private Image[] obstacleImgs = new Image[3]; //Hindernisse
 
         private Clip coinSound; //Münzensound
-        private Clip fuelSound;
+        private Clip fuelSound; //Mamf
         private Clip unsichtbarmusic;
         private Clip bgMusic;
+        private Clip jetpacksound;
+
+        private boolean jetpacksoundPlaying = false;
 
         private double bgSpeedFactor = 0.5;
 
@@ -115,7 +123,7 @@ public class Main {
 
             if (storedPowerUp.equals("Unsichtbar")) {
                 unsichtbarAktiv = true;
-                unsichtbarEndeMs = System.currentTimeMillis() + 5000;
+                unsichtbarEndeMs = System.currentTimeMillis() + 5000; //5 Sekunden -> dauer vom Unsuchtbar
 
                stopSound(bgMusic);
                 playLoop(unsichtbarmusic);
@@ -124,6 +132,16 @@ public class Main {
             if (storedPowerUp.equals("Magnet")) {
                 magnetAktiv = true;
                 magnetEndeMs = now + 10000; //Dauer vom Magnet
+            }
+
+            if (storedPowerUp.equals("DoppelteMünzen")) {
+                doubleCoinsAktiv = true;
+                doubleCoinsEndeMs = now + 15000; //Dauer 15 Sek Doppelte Münzen
+            }
+
+            if (storedPowerUp.equals("UnendlichBenzin")) {
+                infiniteFuelAktiv = true;
+                infiniteFuelEndeMs = now + 10000; //Dauer 10 Sek Unendlich Benin
             }
 
             storedPowerUp = null;
@@ -210,7 +228,7 @@ public class Main {
 
         private long lastTickMs = 0;
 
-        //Powerups!!!
+        //Powerups!!!===========================================
         private String storedPowerUp = null;
         //Unsichtbar
         private boolean unsichtbarAktiv = false;
@@ -226,6 +244,14 @@ public class Main {
         private double magnetRange = 800; //Reichweite
         private double magnetPull = 10.0; //Ziehstärkeeö
 
+        // Double Coins!
+        private boolean doubleCoinsAktiv = false;
+        private long doubleCoinsEndeMs = 0;
+
+        //Unendlich PanCAKES!!!
+        private boolean infiniteFuelAktiv = false;
+        private long infiniteFuelEndeMs = 0;
+//====================================================================
 
 
 
@@ -287,6 +313,24 @@ public class Main {
             clip.setFramePosition(0);
         }
 
+        private void startJetpackSound() {
+            if (jetpacksound == null) return;
+            if (jetpacksoundPlaying) return;
+
+            jetpacksound.setFramePosition(0);
+            jetpacksound.loop(Clip.LOOP_CONTINUOUSLY);
+            jetpacksoundPlaying = true;
+        }
+
+        private void stopJetpackSound() {
+            if (jetpacksound == null) return;
+            if (!jetpacksoundPlaying) return;
+
+            jetpacksound.stop();
+            jetpacksound.setFramePosition(0);
+            jetpacksoundPlaying = false;
+        }
+
         //Konstruktor
         GamePanel(int w, int h) {
             this.W = w;
@@ -297,7 +341,6 @@ public class Main {
             setFocusable(true);
             addKeyListener(this);
 
-            resetGame();
 
             playerImageNormal = loadImage("assets/Screenshot 2026-02-02 101301-Photoroom.png"); //Player pic
             playerImagePower = new ImageIcon("assets/Power.gif").getImage();
@@ -307,9 +350,9 @@ public class Main {
             //Münzen bild
             scoreCoinImage = loadImage("assets/Münze.png");
 
-            bg[0] = loadImage("assets/Background.png"); //Hintergünde
-            bg[1] = loadImage("assets/Background.png");
-            bg[2] = loadImage("assets/Background.png");
+            bg[0] = loadImage("assets/ost_ost.png"); //Hintergünde
+            bg[1] = loadImage("assets/ost_ost.png");
+            bg[2] = loadImage("assets/ost_ost.png");
 
 
             //Raketen bild
@@ -323,6 +366,9 @@ public class Main {
             fuelSound = loadSound("assets/pancake.wav"); //Mamf
             unsichtbarmusic = loadSound("assets/PowerUpNeu.wav"); //PowerUp
             bgMusic = loadSound("assets/BackgroundBanger.wav");
+            jetpacksound = loadSound("assets/Jetpack.wav");
+
+            resetGame();
 
             // FIX: Timer ist javax.swing.Timer
             timer = new javax.swing.Timer(16, this); // ~60 FPS
@@ -334,13 +380,18 @@ public class Main {
         }
 
         private void resetGame() {
+            stopJetpackSound();
+            obstacleEveryMsMin = 500;
+            obstacleEveryMsMax = 900;
+
+
             player = new Player(120, H / 2.0, playerW, playerH);
             obstacles.clear();
             fuelPickups.clear();
             scoreCoins.clear();
             jetOn = false;
             gameOver = false;
-
+            worldSpeed = baseWorldSpeed;
 
             startTime = System.currentTimeMillis();
             score = 0;
@@ -356,7 +407,7 @@ public class Main {
 
             stopSound(unsichtbarmusic);
             stopSound(bgMusic);
-            playSound(bgMusic);
+            playLoop(bgMusic);
 
             coinsGesammelt = 0;
             nächsterpowerUpAb = 1; // Anzahl der benötigten Münzen
@@ -415,16 +466,32 @@ public class Main {
                 magnetAktiv = false;
             }
 
+            if (doubleCoinsAktiv && now >= doubleCoinsEndeMs) {
+                doubleCoinsAktiv = false;
+            }
+
+            if (infiniteFuelAktiv && now >= infiniteFuelEndeMs) {
+                infiniteFuelAktiv = false;
+            }
+
             if (dt < 0) dt = 0;
             if (dt > 0.1) dt = 0.1;
 
             boolean kanister = jetOn && benzin > 0;
 
+            if (!gameOver && kanister) startJetpackSound();
+            else stopJetpackSound();
+
             if (kanister) {
                 player.vy -= thrust;
 
-                benzin -= fueldrain * dt;
-                if (benzin < 0) benzin = 0;
+                /*benzin -= fueldrain * dt;
+                if (benzin < 0) benzin = 0; */
+
+                if (!infiniteFuelAktiv) {
+                    benzin -= fueldrain * dt;
+                    if (benzin < 0) benzin = 0;
+                }
             }
             player.vy += gravity;
 
@@ -476,7 +543,7 @@ public class Main {
 
             for (ScoreCoin sc : scoreCoins) sc.x -= worldSpeed; // Münzen bewegung
 
-            for (Rakete r : raketen) r.x += r.vx;
+            for (Rakete r : raketen) r.x += (r.vx - worldSpeed);
 
             //PowerUp Magnet
             if (magnetAktiv) {
@@ -495,6 +562,7 @@ public class Main {
                 if (pr.intersects(ob.rect())) {
                     if (!unsichtbarAktiv) {
                     gameOver = true;
+                    stopJetpackSound();
                     stopSound(bgMusic);
                     stopSound(unsichtbarmusic);
                     return;
@@ -506,6 +574,7 @@ public class Main {
                 if (pr.intersects(r.rect())) {
                     if (!unsichtbarAktiv) {
                     gameOver = true;
+                    stopJetpackSound();
                     stopSound(bgMusic);
                     stopSound(unsichtbarmusic);
                     return;
@@ -531,20 +600,34 @@ public class Main {
                     nächsteRaketeInMs = randBetween(raketeJedeMsMin, raketeJedeMsMax);
                 }
             }
+            //Coins einsammeln amk
             for (ScoreCoin sc : scoreCoins) {
                 if (!sc.collected && pr.intersects(sc.rect())) {
                     sc.collected = true;
 
-                    coinsGesammelt++;
-                    coinScore += scoreCoinPoints;
-                    checkPowerUpDrop();
+                    int gain = scoreCoinPoints;
+                    if (doubleCoinsAktiv) gain *= 2;
 
+                    coinScore += gain;
+                    coinsGesammelt++;
+
+                   /* coinsGesammelt++;
+                    coinScore += scoreCoinPoints;
+                    checkPowerUpDrop(); */
+
+                    checkPowerUpDrop();
                     playSound(coinSound);
                 }
             }
 
             long aliveMs = now - startTime;
             score = (int) (aliveMs / 50) + coinScore;
+
+            int level = score / 500; //Alle 500 Score wirds schneller
+            worldSpeed = Math.min(maxWorldSpeed, baseWorldSpeed + level * speedstep);
+
+            obstacleEveryMsMin = Math.max(250, 500 - level * 20);
+            obstacleEveryMsMax = Math.max(450, 900 + level * 25);
         }
 
         private void spawnObstacle() {
@@ -570,8 +653,12 @@ public class Main {
                 int chance = 100; //35 ist dann richtig
                 if (rnd.nextInt(100) < chance) {
 
-                    if (rnd.nextBoolean()) storedPowerUp = "Unsichtbar";
-                    else storedPowerUp = "Magnet";
+
+                    int r = rnd.nextInt(4);
+                    if (r == 0) storedPowerUp = "Unsichtbar";
+                    else if (r == 1) storedPowerUp = "Magnet";
+                    else if (r == 2) storedPowerUp = "DoppelteMünzen";
+                    else if (r == 3) storedPowerUp = "UnendlichBenzin";
                 }
             }
         }
@@ -644,10 +731,10 @@ public class Main {
                 g2.setColor(new Color(90, 180, 255));
                 g2.fillRoundRect((int) player.x, (int) player.y, player.w, player.h, 10, 10);
             }
-            // DEBUG HITBOX
+           /* // DEBUG HITBOX
             g2.setColor(new Color(0, 255, 0, 120));
             Rectangle hb = player.rect();
-            g2.fillRect(hb.x, hb.y, hb.width, hb.height);
+            g2.fillRect(hb.x, hb.y, hb.width, hb.height); */
 
 
             // Jet flame
@@ -694,6 +781,16 @@ public class Main {
             if (magnetAktiv) {
                 long left = Math.max(0, (magnetEndeMs - System.currentTimeMillis()) / 1000);
                 g2.drawString("Magnet: " + left + "s", 16, 146);
+            }
+
+            if (doubleCoinsAktiv) {
+                long left =  Math.max(0, (doubleCoinsEndeMs - System.currentTimeMillis()) / 1000);
+                g2.drawString("x2 Münzen " + left + "s", 16, 168);
+            }
+
+            if (infiniteFuelAktiv) {
+                long left  = Math.max(0, infiniteFuelEndeMs - System.currentTimeMillis()) / 1000;
+                g2.drawString("∞ Benzin: " + left + "s", 16, 180);
             }
 
             //bar
