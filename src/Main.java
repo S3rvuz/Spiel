@@ -129,8 +129,14 @@ public class Main {
 
         }
         private void drawHighscoreScreen(Graphics2D g2) {
-            g2.setColor(Color.RED);
-            g2.fillRect(0, 0, W, H);
+            Image bgImg = (highscoreBg != null) ? highscoreBg : menuBg;
+
+            if (bgImg != null) {
+                drawCover(g2, bgImg, 0, 0, W, H);
+            } else {
+                g2.setColor(Color.BLACK);
+                g2.fillRect(0, 0, W, H);
+            }
 
             g2.setFont(new Font("consolas", Font.BOLD, 48));
             g2.setColor(Color.WHITE);
@@ -169,6 +175,7 @@ public class Main {
             int y = 220;
 
             for (int i = 0; i < n; i++) {
+                boolean freigeschaltet = isUnlocked(i);
                 int x = startX + i * (boxW + gap);
                 boolean sel = (i == characterIndex);
 
@@ -180,17 +187,53 @@ public class Main {
 
                 Image p = characters[i].portrait;
                 if (p != null) {
+                    if (!freigeschaltet) {
+                        // Grau / disabled Effekt
+                        g2.setComposite(
+                                AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.35f)
+                        );
+                    }
                     g2.drawImage(p, x + 10, y + 10, boxW - 20, boxW - 20, null);
+
+                    g2.setComposite(AlphaComposite.SrcOver);
                 } else {
                     g2.setColor(Color.GRAY);
                     g2.fillRect(x + 10, y + 10, boxW - 20, boxW - 20);
                 }
 
-                g2.setFont(new Font("Consolas", Font.BOLD, 20));
+                if (!freigeschaltet) {
+                    g2.setColor(new Color(0, 0, 0, 140)); //GrauFilter
+                    g2.fillRoundRect(x, y, boxW, boxH, 16, 16);
+
+                    g2.setColor(new Color(118, 118, 118, 40)); //Graufilter
+                    g2.fillRoundRect(x + 10, y + 10, boxW, boxH, 16, 16);
+                }
+
+              /*  g2.setFont(new Font("Consolas", Font.BOLD, 20));
                 g2.setColor(Color.WHITE);
                 String name = characters[i].name;
                 int nw = g2.getFontMetrics().stringWidth(name);
-                g2.drawString(name, x + (boxW - nw) / 2, y + boxH - 30);
+                g2.drawString(name, x + (boxW - nw) / 2, y + boxH - 30); */
+                g2.setFont(new Font("consolas", Font.BOLD, 20));
+                g2.setColor(freigeschaltet ? Color.WHITE : Color.GRAY);
+
+                String name = characters[i].name;
+                int nw = g2.getFontMetrics().stringWidth(name);
+
+                int nameY = y + boxH - 45;
+                g2.drawString(name, x + (boxW - nw) / 2, nameY);
+
+
+                if (!freigeschaltet) {
+                    g2.setFont(new Font("Consolas", Font.PLAIN, 14));
+                    g2.setColor(Color.LIGHT_GRAY);
+
+                    int need = unlockScore[i]; // oder: benötigtScore(i)
+                    String req = "Benötigt: " + need;
+                    int rw = g2.getFontMetrics().stringWidth(req);
+
+                    g2.drawString(req, x + (boxW - rw) / 2, nameY + 18);
+                }
             }
 
             g2.setFont(new Font("Consolas", Font.PLAIN, 16));
@@ -267,6 +310,7 @@ public class Main {
         private double[] bgX = new double[3];
         private Image[] obstacleImgs = new Image[3]; //Hindernisse
         private Image menuBg;
+        private Image highscoreBg;
 
         private Clip coinSound; //Münzensound
         private Clip fuelSound; //Mamf
@@ -292,6 +336,21 @@ public class Main {
 
         private boolean jetOn = false;
         private boolean gameOver = false;
+
+        private final int[] unlockScore = {0, 1000, 2500}; //Unlockscore
+
+        private boolean isUnlocked(int idx) {
+            if (idx == 0) return true;
+            if (idx == 1) return highscore >= 1000;
+            if (idx == 2) return highscore >= 2500;
+            return false;
+        }
+
+        private int benötigtScore(int idx) {
+            if (idx == 1) return 1000;
+            if (idx == 2) return 2500;
+            return 0;
+        }
 
         //Raketen
         private void spawnRocket() {
@@ -550,7 +609,8 @@ public class Main {
         private void gehZurück() {
             totAnim = false;
             deathSoundPlayed = false;
-            state = GameState.MENU;
+           // state = GameState.MENU;
+            setState(GameState.MENU);
 
             gameOver = false;
             jetOn = false;
@@ -562,7 +622,7 @@ public class Main {
             fuelPickups.clear();
             scoreCoins.clear();
             raketen.clear();
-            playLoop(menuMusic);
+           // playLoop(menuMusic);
         }
 
         private void triggerGameOver() {
@@ -609,6 +669,8 @@ public class Main {
 
             menuBg = loadImage("assets/MenuBg.png");
 
+            highscoreBg = loadImage("assets/content.png"); //highscore Background
+
 
             //Raketen bild
             raketenImage = loadImage("assets/Rocket_card_render_1.png");
@@ -623,7 +685,7 @@ public class Main {
             bgMusic = loadSound("assets/BackgroundBanger.wav");
             jetpacksound = loadSound("assets/Jetpack.wav");
             deathSound = loadSound("assets/GameOver.wav");
-            menuMusic = loadSound("assets/BackgroundBanger.wav");
+            menuMusic = loadSound("assets/Goyol-2023_3.wav");
 
             characters = new CharacterProfile[] {
                     new CharacterProfile("Mini-Pekka", //Mini-Pekka
@@ -639,7 +701,7 @@ public class Main {
                             loadSound("assets/Mini-Pekka_Start.wav"), //startsound
                             loadSound("assets/Mini-Pekka_Bg.wav"), //BackgroundMusic
                             loadSound("assets/mini-pekka-pancakes---clash-royale---made-with-Voicemod.wav"), //fuelSound
-                            loadSound("assets/Mini-Pekka.wav"), //deathsound
+                            loadSound("assets/clash-royale-king-cry.wav"), //deathsound
                             60.0, 8.0, 20.0
                             ),
 
@@ -657,12 +719,12 @@ public class Main {
                             loadSound("assets/jungsvonderstrasse.wav"), //Start
                             loadSound("assets/BackgroundBanger.wav"), //BG
                             loadSound("assets/freesound_community-burp-101854.wav"),
-                            loadSound("assets/gestrandet.wav"),
+                            loadSound("assets/gestrandet2.wav"),
                             70.0, 7.0, 18.0
                     ),
 
                     new CharacterProfile(
-                            "Sitz",
+                            "Coming soon!",
                             loadImage("assets/oakley-sonnenbrille-rslv-matte-black-prizm-road-oo9484d-0249_2-removebg-preview.png"),
                             loadImage("assets/Screenshot 2026-02-02 101301-Photoroom.png"),
                             new ImageIcon("assets/vdsgif_last.gif").getImage(),
@@ -1165,7 +1227,7 @@ public class Main {
             g2.setFont(new Font("Consolas", Font.PLAIN, 12));
             g2.drawString("SPACE = jetpack | R = restart", 16, 70);
             g2.setFont(new Font("Consolas", Font.PLAIN, 12));
-            g2.drawString("QUIT | ESC", 16, 90);
+            g2.drawString("Menü | ESC", 16, 90);
             //Powerup HUD
             g2.setFont(new Font("Consolas", Font.PLAIN, 12));
             if (storedPowerUp != null) {
@@ -1285,11 +1347,16 @@ public class Main {
                    characterIndex = (characterIndex - 1 + characters.length) % characters.length;
                } else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
                    characterIndex = (characterIndex + 1) % characters.length;
-               } else if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+               }
+               else if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                   if (!isUnlocked(characterIndex)) {
+                       return;
+                   }
                    selectedCharacter = characters[characterIndex];
                    applyCharacter(selectedCharacter);
-                   state = GameState.MENU;
-               } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                   setState(GameState.MENU);
+               }
+               else if (e.getKeyCode() == KeyEvent.VK_ESCAPE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
                    state = GameState.MENU;
                }
                repaint();
@@ -1301,7 +1368,10 @@ public class Main {
             if (e.getKeyCode() == KeyEvent.VK_W) jetOn = true;
 
             if (e.getKeyCode() == KeyEvent.VK_R) resetGame();
-            if (e.getKeyCode() == KeyEvent.VK_ESCAPE) System.exit(0);
+            if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                gehZurück();
+                return;
+            }
             if (e.getKeyCode() == KeyEvent.VK_E) {
                 activeStoredPowerUp();
             }
