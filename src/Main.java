@@ -37,6 +37,60 @@ public class Main {
 
     static class GamePanel extends JPanel implements ActionListener, KeyListener {
 
+        static class CharacterProfile {
+            final String name;
+
+            final Image portrait;
+            final Image playerNormal; // Player
+            final Image playerPower;  // Unsichtbar-Optik
+            final Image[] bg;         // 3 Hintergründe
+            final Image fuelImg;      // Benzin Bild
+
+            final Clip startSound;    // 1x pro Run
+            final Clip bgMusic;       // pro Charakter
+            final Clip fuelSound;     // pro Charakter
+            final Clip deathSound;    // pro Charakter
+
+            final double startFuel;
+            final double fuelDrain;
+            final double fuelGain;
+
+            CharacterProfile(String name, Image portrait, Image playerNormal, Image playerPower, Image[] bg, Image fuelImg, Clip startSound, Clip bgMusic, Clip fuelSound,Clip deathSound, double startFuel, double fuelDrain, double fuelGain) {
+                this.name = name;
+                this.portrait = portrait;
+                this.playerNormal = playerNormal;
+                this.playerPower = playerPower;
+                this.bg = bg;
+                this.fuelImg = fuelImg;
+
+                this.startSound = startSound;
+                this.bgMusic = bgMusic;
+                this.fuelSound = fuelSound;
+                this.deathSound = deathSound;
+
+                this.startFuel = startFuel;
+                this.fuelDrain = fuelDrain;
+                this.fuelGain = fuelGain;
+
+            }
+        }
+
+        private void applyCharacter(CharacterProfile c) {
+            playerImageNormal = c.playerNormal;
+            playerImagePower = c.playerPower;
+
+            fuelImage = c.fuelImg;
+
+            for (int i = 0; i < 3; i++) {
+                bg[i] = c.bg[i];
+            }
+
+            benzin = c.startFuel;
+            fueldrain = c.fuelDrain;
+            benzinprogas = c.fuelGain;
+        }
+
+
         private void drawMenu(Graphics2D g2) {
            /* g2.setColor(Color.RED);
             g2.fillRect(0, 0, WIDTH, HEIGHT); */
@@ -96,26 +150,55 @@ public class Main {
         }
 
         private void drawCharacterScreen(Graphics2D g2) {
-            g2.setColor(new Color(0, 0, 0, 170));
+            g2.setColor(new Color(0, 0, 0, 190));
             g2.fillRect(0, 0, W, H);
 
             g2.setFont(new Font("Consolas", Font.BOLD, 42));
             g2.setColor(Color.WHITE);
             String t = "CHARAKTERWAHL";
             int tw = g2.getFontMetrics().stringWidth(t);
-            g2.drawString(t, (W - tw) / 2, 180);
+            g2.drawString(t, (W - tw) / 2, 140);
 
-            g2.setFont(new Font("Consolas", Font.PLAIN, 20));
+            int n = characters.length;
+            int boxW = 220;
+            int boxH = 260;
+            int gap = 60;
+
+            int totalW = n * boxW + (n - 1) * gap;
+            int startX = (W - totalW) / 2;
+            int y = 220;
+
+            for (int i = 0; i < n; i++) {
+                int x = startX + i * (boxW + gap);
+                boolean sel = (i == characterIndex);
+
+                g2.setColor(sel ? Color.GREEN : Color.DARK_GRAY);
+                g2.fillRoundRect(x - 6, y - 6, boxW + 12, boxH + 12, 18, 18);
+
+                g2.setColor(new Color(20, 20, 20));
+                g2.fillRoundRect(x, y, boxW, boxH, 16, 16);
+
+                Image p = characters[i].portrait;
+                if (p != null) {
+                    g2.drawImage(p, x + 10, y + 10, boxW - 20, boxW - 20, null);
+                } else {
+                    g2.setColor(Color.GRAY);
+                    g2.fillRect(x + 10, y + 10, boxW - 20, boxW - 20);
+                }
+
+                g2.setFont(new Font("Consolas", Font.BOLD, 20));
+                g2.setColor(Color.WHITE);
+                String name = characters[i].name;
+                int nw = g2.getFontMetrics().stringWidth(name);
+                g2.drawString(name, x + (boxW - nw) / 2, y + boxH - 30);
+            }
+
+            g2.setFont(new Font("Consolas", Font.PLAIN, 16));
             g2.setColor(Color.LIGHT_GRAY);
-            String info = "koks"; //Muss noch gemacht werden
-            int iw = g2.getFontMetrics().stringWidth(info);
-            g2.drawString(info, (W - iw) / 2, 250);
-
-            String back = "ESC = zurück";
-            int bw = g2.getFontMetrics().stringWidth(back);
-            g2.drawString(back, (W - bw) / 2, H - 80);
+            String hint = "LEFT/RIGHT = auswählen | ENTER = setzen | ESC = zurück";
+            int hw = g2.getFontMetrics().stringWidth(hint);
+            g2.drawString(hint, (W - hw) / 2, H - 80);
         }
-
 
         enum GameState{MENU, RUNNING, HIGHSCORE, CHARACTER}
         private GameState state = GameState.MENU;
@@ -191,6 +274,12 @@ public class Main {
         private Clip bgMusic;
         private Clip jetpacksound;
         private Clip deathSound;
+        private Clip menuMusic;
+
+        private CharacterProfile[] characters;
+        private int characterIndex = 0;
+        private CharacterProfile selectedCharacter;
+        private boolean startSoundPlayed = false;
 
         private boolean totAnim = false;
         private boolean deathSoundPlayed = false;
@@ -224,7 +313,7 @@ public class Main {
                 unsichtbarAktiv = true;
                 unsichtbarEndeMs = System.currentTimeMillis() + 5000; //5 Sekunden -> dauer vom Unsuchtbar
 
-               stopSound(bgMusic);
+               stopSound(selectedCharacter.bgMusic);
                 playLoop(unsichtbarmusic);
             }
 
@@ -246,6 +335,17 @@ public class Main {
             storedPowerUp = null;
 
         }
+
+        private void setState(GameState newState) {
+            state = newState;
+
+            if (state == GameState.MENU || state == GameState.HIGHSCORE || state == GameState.CHARACTER) {
+                ensureMenuMusic();
+            } else if (state == GameState.RUNNING) {
+                ensureGameMusic();
+            }
+        }
+
 
         private void applyMagnet(double px, double py, double dt) {
             //Zielpunkt
@@ -352,6 +452,23 @@ public class Main {
         private long infiniteFuelEndeMs = 0;
 //====================================================================
 
+        private void stopAllMusic() {
+            stopSound(menuMusic);
+            stopSound(selectedCharacter != null ? selectedCharacter.bgMusic : null);
+            stopSound(unsichtbarmusic);
+        }
+
+        private void ensureMenuMusic() {
+            stopAllMusic();
+            playLoop(menuMusic);
+        }
+
+        private void ensureGameMusic() {
+            stopSound(menuMusic);
+            stopSound(unsichtbarmusic);
+            playLoop(selectedCharacter.bgMusic);
+        }
+
 
 
 
@@ -445,20 +562,21 @@ public class Main {
             fuelPickups.clear();
             scoreCoins.clear();
             raketen.clear();
+            playLoop(menuMusic);
         }
 
         private void triggerGameOver() {
             if (gameOver) return;
 
             gameOver = true;
-            gameOverEndMs = System.currentTimeMillis() + 5000; //Länge vom Gameover screen
+            gameOverEndMs = System.currentTimeMillis() + 6000; //Länge vom Gameover screen
 
             highscore = Math.max(highscore, score);
 
             jetOn = false;
             stopJetpackSound();
-            stopSound(bgMusic);
-            stopSound(unsichtbarmusic);
+
+            stopAllMusic();
 
             totAnim = true;
             deathSoundPlayed = false;
@@ -505,6 +623,68 @@ public class Main {
             bgMusic = loadSound("assets/BackgroundBanger.wav");
             jetpacksound = loadSound("assets/Jetpack.wav");
             deathSound = loadSound("assets/GameOver.wav");
+            menuMusic = loadSound("assets/BackgroundBanger.wav");
+
+            characters = new CharacterProfile[] {
+                    new CharacterProfile("Mini-Pekka", //Mini-Pekka
+                            loadImage("assets/mini_pekka.png"), //Portrait
+                            loadImage("assets/Mini-Pekka_Power.png"), //Player pic
+                            new ImageIcon("assets/Power-Pekka.gif").getImage(), //PowerUppic
+                            new Image[]{
+                                    loadImage("assets/Mini-Pekka-BackGround.png"), //Background
+                                    loadImage("assets/Mini-Pekka-BackGround.png"),
+                                    loadImage("assets/Mini-Pekka-BackGround.png")
+                            },
+                            loadImage("assets/Pancakes.png"), //Fuel
+                            loadSound("assets/Mini-Pekka_Start.wav"), //startsound
+                            loadSound("assets/Mini-Pekka_Bg.wav"), //BackgroundMusic
+                            loadSound("assets/mini-pekka-pancakes---clash-royale---made-with-Voicemod.wav"), //fuelSound
+                            loadSound("assets/Mini-Pekka.wav"), //deathsound
+                            60.0, 8.0, 20.0
+                            ),
+
+                    new CharacterProfile(
+                            "Kapitän zur See",
+                            loadImage("assets/kaeptn-zur-see.png"), //menupic
+                            loadImage("assets/kaeptnzursee1.png"), //pic
+                            new ImageIcon("assets/kaeptnzurseepowerupv2.gif").getImage(), //Power
+                            new Image[]{
+                                    loadImage("assets/penny.png"),
+                                    loadImage("assets/penny.png"),
+                                    loadImage("assets/penny.png")
+                            },
+                            loadImage("assets/snagria-1l_1.png"), //Fuel
+                            loadSound("assets/jungsvonderstrasse.wav"), //Start
+                            loadSound("assets/BackgroundBanger.wav"), //BG
+                            loadSound("assets/freesound_community-burp-101854.wav"),
+                            loadSound("assets/gestrandet.wav"),
+                            70.0, 7.0, 18.0
+                    ),
+
+                    new CharacterProfile(
+                            "Sitz",
+                            loadImage("assets/oakley-sonnenbrille-rslv-matte-black-prizm-road-oo9484d-0249_2-removebg-preview.png"),
+                            loadImage("assets/Screenshot 2026-02-02 101301-Photoroom.png"),
+                            new ImageIcon("assets/vdsgif_last.gif").getImage(),
+                            new Image[]{
+                                    loadImage("assets/Background.png"),
+                                    loadImage("assets/Background.png"),
+                                    loadImage("assets/Background.png")
+                            },
+                            loadImage("assets/Pancakes.png"),
+                            loadSound("assets/untitled1.wav"),
+                            loadSound("assets/BackgroundBanger.wav"),
+                            loadSound("assets/pancake.wav"),
+                            loadSound("assets/taschenrechner.wav"),
+                            50.0, 10.0, 25.0
+                    )
+            };
+
+            selectedCharacter = characters[0];
+            applyCharacter(selectedCharacter);
+
+          //  ensureMenuMusic();
+            setState(GameState.MENU);
 
             resetGame();
 
@@ -519,6 +699,8 @@ public class Main {
         }
 
         private void resetGame() {
+            startSoundPlayed = false;
+            applyCharacter(selectedCharacter);
             totAnim = false;
             deathSoundPlayed = false;
             stopJetpackSound();
@@ -547,8 +729,8 @@ public class Main {
             magnetEndeMs = 0;
 
             stopSound(unsichtbarmusic);
-            stopSound(bgMusic);
-            playLoop(bgMusic);
+           // stopSound(menuMusic);
+            stopSound(unsichtbarmusic);
 
             coinsGesammelt = 0;
             nächsterpowerUpAb = 1; // Anzahl der benötigten Münzen
@@ -577,6 +759,11 @@ public class Main {
 
             letzteRaketeSpawn = now;
             nächsteRaketeInMs = randBetween(raketeJedeMsMin, raketeJedeMsMax);
+
+            if (state == GameState.RUNNING) {
+                stopAllMusic();
+                playLoop(selectedCharacter.bgMusic);
+            }
         }
 
         private int randBetween(int a, int b) {
@@ -585,9 +772,9 @@ public class Main {
 
         @Override
         public void actionPerformed(ActionEvent e) {
-
-            if (state == GameState.RUNNING && !gameOver) {
-                updateWorld();
+            if (state == GameState.RUNNING) {
+                if (!gameOver) updateWorld();
+                else updateDeathAnimation();
             }
 
             if (state == GameState.RUNNING && gameOver) {
@@ -611,11 +798,16 @@ public class Main {
             double dt = (now - lastTickMs) /  1000.0;
             lastTickMs = now;
 
+            if (!startSoundPlayed) {
+                playSound(selectedCharacter.startSound);
+                startSoundPlayed = true;
+            }
+
             //1. Powerups Uncihtbar!!
             if (unsichtbarAktiv && now >= unsichtbarEndeMs) {
                 unsichtbarAktiv = false;
                 stopSound(unsichtbarmusic);
-                if (!gameOver) playLoop(bgMusic);
+                if (!gameOver) playLoop(selectedCharacter.bgMusic);
             }
 
             //Magnet endet
@@ -754,7 +946,7 @@ public class Main {
                     benzin += benzinprogas;
                     if (benzin > voll) benzin = voll;
 
-                    playSound(fuelSound);
+                    playSound(selectedCharacter.fuelSound);
 
 
                 }
@@ -800,7 +992,7 @@ public class Main {
             if (!totAnim) return;
 
             if (!deathSoundPlayed) {
-                playSound(deathSound);
+                playSound(selectedCharacter.deathSound);
                 deathSoundPlayed = true;
             }
 
@@ -1065,8 +1257,11 @@ public class Main {
                     menuIndex = (menuIndex + 1) % meniItems.length;
                 } else if (e.getKeyCode() == KeyEvent.VK_ENTER) {
                     if (menuIndex == 0) { //Start
-                        state = GameState.RUNNING;
-                        resetGame();
+                        if (menuIndex == 0) { // Start
+                            state = GameState.RUNNING;
+                            resetGame(); // resetGame startet dann die Musik (Fix 1)
+                        }
+
                     } else if (menuIndex == 1) { //Highscore
                         state = GameState.HIGHSCORE;
                     } else if (menuIndex == 2) {
@@ -1079,12 +1274,27 @@ public class Main {
                 }
                 return;
             }
-            if (state == GameState.HIGHSCORE || state == GameState.CHARACTER) {
-                if (e.getKeyCode() == KeyEvent.VK_ESCAPE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
-                    state = GameState.MENU;
-                }
-                return;
-            }
+           if (state == GameState.HIGHSCORE) {
+               if (e.getKeyCode() == KeyEvent.VK_ESCAPE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                   state = GameState.MENU;
+               }
+               return;
+           }
+           if (state == GameState.CHARACTER) {
+               if (e.getKeyCode() == KeyEvent.VK_LEFT) {
+                   characterIndex = (characterIndex - 1 + characters.length) % characters.length;
+               } else if (e.getKeyCode() == KeyEvent.VK_RIGHT) {
+                   characterIndex = (characterIndex + 1) % characters.length;
+               } else if (e.getKeyCode() == KeyEvent.VK_ENTER) {
+                   selectedCharacter = characters[characterIndex];
+                   applyCharacter(selectedCharacter);
+                   state = GameState.MENU;
+               } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE || e.getKeyCode() == KeyEvent.VK_BACK_SPACE) {
+                   state = GameState.MENU;
+               }
+               repaint();
+               return;
+           }
 
             //==(Game Steuerung)====
             if (e.getKeyCode() == KeyEvent.VK_SPACE) jetOn = true;
