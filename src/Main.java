@@ -105,7 +105,7 @@ public class Main {
 
             g2.setFont(new Font("Consolas", Font.BOLD, 52));
             g2.setColor(Color.WHITE);
-            String title = "Auf dem Sitz das Spiel!";
+            String title = "JetPack-Royale";
             int tw = g2.getFontMetrics().stringWidth(title);
             g2.drawString(title, (W - tw) / 2, 160);
 
@@ -341,7 +341,7 @@ public class Main {
 
         private boolean isUnlocked(int idx) {
             if (idx == 0) return true;
-            if (idx == 1) return highscore >= 1000;
+            if (idx == 1) return highscore >= 1000; //Benötigter_Score 100 als Test
             if (idx == 2) return highscore >= 2500;
             return false;
         }
